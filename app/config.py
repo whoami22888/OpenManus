@@ -1,6 +1,6 @@
+import json
 import os
 import platform
-import json
 import shutil
 import threading
 import tomllib
@@ -25,11 +25,11 @@ def is_android_or_proot() -> bool:
     # 1. Direct Termux environment variables or files
     if os.environ.get("TERMUX_VERSION") or os.path.exists("/data/data/com.termux"):
         return True
-    
+
     # 2. PRoot environments often leave specific indicators
     if os.environ.get("PROOT_TMPDIR") or os.path.exists("/dev/proot"):
         return True
-        
+
     # 3. Check /proc/version or /proc/sys/kernel/osrelease for android/termux signatures
     try:
         if os.path.exists("/proc/version"):
@@ -39,7 +39,7 @@ def is_android_or_proot() -> bool:
                     return True
     except Exception:
         pass
-        
+
     # 4. Fallback check for arm64 root with PRoot specific indicators (like no standard systemd)
     # NOTE: While this is a highly effective heuristic for Termux PRoot environments on Android,
     # it may have false positives on embedded ARM Linux systems or minimal arm64 container images that run
@@ -48,11 +48,11 @@ def is_android_or_proot() -> bool:
     is_root = False
     if hasattr(os, "getuid"):
         is_root = (os.getuid() == 0) or (hasattr(os, "geteuid") and os.geteuid() == 0)
-        
+
     if platform.machine() in ("aarch64", "arm64") and is_root:
         if not os.path.exists("/run/systemd/system"):
             return True
-            
+
     return False
 
 
@@ -150,7 +150,7 @@ class SandboxSettings(BaseModel):
 
 
 class DaytonaSettings(BaseModel):
-    daytona_api_key: str
+    daytona_api_key: str = ""
     daytona_server_url: Optional[str] = Field(
         "https://app.daytona.io/api", description=""
     )
@@ -338,6 +338,7 @@ class Config:
 
             if flags_added:
                 from loguru import logger
+
                 logger.warning(
                     f"Android/PRoot environment detected. Automatically adding sandbox-disabling browser flags: {flags_added}"
                 )

@@ -25,10 +25,10 @@ from app.config import LLMSettings, config
 from app.exceptions import TokenLimitExceeded
 from app.logger import logger  # Assuming a logger is set up in your app
 from app.schema import (
-    Function,
     ROLE_VALUES,
     TOOL_CHOICE_TYPE,
     TOOL_CHOICE_VALUES,
+    Function,
     Message,
     ToolCall,
     ToolChoice,
@@ -940,7 +940,9 @@ class LLM:
                 if tools:
                     for tool in tools:
                         if not isinstance(tool, dict) or "type" not in tool:
-                            raise ValueError("Each tool must be a dict with 'type' field")
+                            raise ValueError(
+                                "Each tool must be a dict with 'type' field"
+                            )
 
                 input_tokens = self.count_message_tokens(messages)
                 if tools:
@@ -972,7 +974,8 @@ class LLM:
                 self.update_token_count(
                     usage.get("input_tokens", input_tokens),
                     usage.get(
-                        "output_tokens", self.count_tokens(response_message.content or "")
+                        "output_tokens",
+                        self.count_tokens(response_message.content or ""),
                     ),
                 )
                 return response_message

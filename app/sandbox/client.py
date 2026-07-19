@@ -89,6 +89,8 @@ class LocalShellSession:
         if sys.version_info >= (3, 11):
             kwargs["process_group"] = 0
         elif hasattr(os, "setsid"):
+            # Note: preexec_fn is not thread-safe and can lead to deadlocks in multi-threaded programs.
+            # It is only used here as a best-effort process grouping fallback for legacy Python versions.
             kwargs["preexec_fn"] = os.setsid
 
         self._process = await asyncio.create_subprocess_shell(
@@ -126,10 +128,13 @@ class LocalShellSession:
 
         # Read output until the sentinel is found using the standard readuntil API
         try:
-            async with asyncio.timeout(exec_timeout):
-                data = await self._process.stdout.readuntil(self._sentinel.encode())
-                output = data[:-len(self._sentinel)].decode("utf-8", errors="replace")
-        except asyncio.TimeoutError:
+            if sys.version_info >= (3, 11):
+                async with asyncio.timeout(exec_timeout):
+                    data = await self._process.stdout.readuntil(self._sentinel.encode())
+            else:
+                data = await asyncio.wait_for(self._process.stdout.readuntil(self._sentinel.encode()), exec_timeout)
+            output = data[:-len(self._sentinel)].decode("utf-8", errors="replace")
+        except (asyncio.TimeoutError, TimeoutError):
             self._timed_out = True
             raise TimeoutError(f"Command execution timed out after {exec_timeout} seconds") from None
 

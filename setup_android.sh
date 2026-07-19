@@ -46,7 +46,7 @@ if [ -d "/data/data/com.termux" ] && [ -z "$PROOT_DISTRO_DEV" ]; then
     echo "Status: Running inside Termux (Host Android environment)"
     
     # Ensure proot-distro is installed
-    if ! command -v proot-distro &> /dev/null; then
+    if ! command -v proot-distro >/dev/null 2>&1; then
         echo "PRoot Distro is required to run a standard Linux environment inside Termux."
         if prompt_yes_no "Would you like to install proot-distro automatically?" "Y"; then
             echo "Installing proot-distro..."
@@ -78,7 +78,8 @@ if [ -d "/data/data/com.termux" ] && [ -z "$PROOT_DISTRO_DEV" ]; then
     
     # We copy the script and run it inside PRoot
     export PROOT_DISTRO_DEV=1
-    proot-distro login ubuntu --shared-tmp -- bash -c "cd \"$REPO_PATH\" && bash setup_android.sh" || {
+    SCRIPT_NAME=$(basename "${BASH_SOURCE[0]}")
+    proot-distro login ubuntu --shared-tmp -- bash -c "cd \"$REPO_PATH\" && bash \"$SCRIPT_NAME\"" || {
         echo "Error: Installation inside PRoot Ubuntu failed."
         exit 1
     }

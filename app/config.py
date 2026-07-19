@@ -18,7 +18,8 @@ def get_project_root() -> Path:
 def is_android_or_proot() -> bool:
     """Check if the code is running on Android or within a PRoot environment."""
     # Allow overriding/disabling the auto-detection via environment variable
-    if os.environ.get("DISABLE_ANDROID_DETECTION"):
+    disable_env = os.environ.get("DISABLE_ANDROID_DETECTION", "").lower()
+    if disable_env in ("1", "true", "yes"):
         return False
 
     # 1. Direct Termux environment variables or files

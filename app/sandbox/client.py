@@ -182,6 +182,7 @@ class LocalSubprocessSandboxClient(BaseSandboxClient):
         if os.path.isdir(src):
             if os.path.exists(dst):
                 if os.path.isdir(dst):
+                    # Note: dirs_exist_ok is supported in Python 3.8+ (OpenManus requires Python 3.12+)
                     shutil.copytree(src, os.path.join(dst, os.path.basename(src)), dirs_exist_ok=True)
                 else:
                     raise RuntimeError(f"Cannot copy directory to a file: {dst}")

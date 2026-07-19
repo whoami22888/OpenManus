@@ -78,7 +78,10 @@ if [ -d "/data/data/com.termux" ] && [ -z "$PROOT_DISTRO_DEV" ]; then
     
     # We copy the script and run it inside PRoot
     export PROOT_DISTRO_DEV=1
-    proot-distro login ubuntu --shared-tmp -- bash -c "cd \"$REPO_PATH\" && bash setup_android.sh"
+    proot-distro login ubuntu --shared-tmp -- bash -c "cd \"$REPO_PATH\" && bash setup_android.sh" || {
+        echo "Error: Installation inside PRoot Ubuntu failed."
+        exit 1
+    }
     
     echo "=========================================================="
     echo "Setup finished! You can now start OpenManus with:"

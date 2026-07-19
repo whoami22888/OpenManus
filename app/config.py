@@ -42,7 +42,8 @@ def is_android_or_proot() -> bool:
     # 4. Fallback check for arm64 root with PRoot specific indicators (like no standard systemd)
     # NOTE: While this is a highly effective heuristic for Termux PRoot environments on Android,
     # it may have false positives on embedded ARM Linux systems or minimal arm64 container images that run
-    # as root without systemd.
+    # as root without systemd. Users can disable this auto-detection by setting the environment
+    # variable `DISABLE_ANDROID_DETECTION=1`.
     is_root = False
     if hasattr(os, "getuid") and hasattr(os, "geteuid"):
         is_root = (os.getuid() == 0 or os.geteuid() == 0)
@@ -307,10 +308,18 @@ class Config:
             if not browser_settings:
                 browser_settings = BrowserSettings()
             extra_args = browser_settings.extra_chromium_args or []
+            flags_added = []
             for flag in ["--no-sandbox", "--disable-setuid-sandbox"]:
                 if flag not in extra_args:
                     extra_args.append(flag)
+                    flags_added.append(flag)
             browser_settings.extra_chromium_args = extra_args
+
+            if flags_added:
+                from loguru import logger
+                logger.warning(
+                    f"Android/PRoot environment detected. Automatically adding sandbox-disabling browser flags: {flags_added}"
+                )
 
             if not browser_settings.chrome_instance_path:
                 possible_paths = [

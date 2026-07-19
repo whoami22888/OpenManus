@@ -275,8 +275,12 @@ class LocalSandboxClient(BaseSandboxClient):
             await self.sandbox.create()
             logger.info("Initialized Docker sandbox client successfully.")
         except Exception as e:
-            logger.warning(f"Docker sandbox client creation failed (e.g. running on Android/Termux without root/Docker): {e}. "
-                           "Falling back to Local Subprocess Sandbox Client.")
+            logger.warning(
+                f"Docker sandbox client creation failed (e.g. running on Android/Termux without root/Docker): {e}. "
+                "Falling back to Local Subprocess Sandbox Client. Note: Local Subprocess Sandbox provides "
+                "directory-level isolation within 'workspace/sandbox' but does not isolate processes, memory, "
+                "or network. Use caution when running untrusted tasks."
+            )
             self.sandbox = LocalSubprocessSandboxClient()
             await self.sandbox.create(config, volume_bindings)
 

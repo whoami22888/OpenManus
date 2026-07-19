@@ -150,8 +150,9 @@ cat << 'EOF' > run_android.sh
 #!/bin/bash
 # OpenManus runner script for Android
 set -e
-source venv/bin/activate
-python3 main.py "$@"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/venv/bin/activate"
+python3 "$SCRIPT_DIR/main.py" "$@"
 EOF
 chmod +x run_android.sh
 

@@ -45,10 +45,8 @@ def is_android_or_proot() -> bool:
     # as root without systemd. Users can disable this auto-detection by setting the environment
     # variable `DISABLE_ANDROID_DETECTION=1`.
     is_root = False
-    if hasattr(os, "getuid") and hasattr(os, "geteuid"):
-        is_root = (os.getuid() == 0 or os.geteuid() == 0)
-    elif hasattr(os, "getuid"):
-        is_root = os.getuid() == 0
+    if hasattr(os, "getuid"):
+        is_root = (os.getuid() == 0) or (hasattr(os, "geteuid") and os.geteuid() == 0)
         
     if platform.machine() in ("aarch64", "arm64") and is_root:
         if not os.path.exists("/run/systemd/system"):

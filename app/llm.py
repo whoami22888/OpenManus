@@ -1,6 +1,7 @@
 import json
 import math
 from typing import Dict, List, Optional, Union
+from urllib.parse import urlparse
 
 import httpx
 import tiktoken
@@ -246,7 +247,8 @@ class LLM:
 
     @staticmethod
     def _is_anthropic_base_url(base_url: str) -> bool:
-        return "api.anthropic.com" in (base_url or "").lower()
+        hostname = urlparse(base_url or "").hostname or ""
+        return hostname.lower() == "api.anthropic.com"
 
     def _anthropic_headers(self) -> dict:
         return {

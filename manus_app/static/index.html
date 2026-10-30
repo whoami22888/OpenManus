@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
+<meta name="theme-color" content="#121212"/><meta name="mobile-web-app-capable" content="yes"/>
+<title>My Manus · Tasks</title><link rel="manifest" href="/assets/manifest.webmanifest"/>
+<link rel="stylesheet" href="/assets/style.css"/>
+</head><body><div id="app">
+ <header class="topbar">
+  <button class="icon-btn user-btn" data-action="account" aria-label="Account"><svg viewBox="0 0 24 24"><circle cx="12" cy="7" r="4"/><path d="M4 21v-3a8 8 0 0 1 16 0v3"/></svg></button>
+  <div class="segmented" role="tablist"><button class="selected" data-tab="tasks" role="tab" aria-selected="true">Tasks</button><button data-tab="agents" role="tab" aria-selected="false">Agent</button></div>
+  <button class="icon-btn" data-action="search" aria-label="Search"><svg viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="7"/><path d="m16 16 5.5 5.5"/></svg></button>
+ </header>
+ <main class="main">
+  <section class="intro"><span class="mark">✦</span><div><strong>My Manus Workspace</strong><div class="sub">Your agents, projects and computers in one place</div></div><span id="health-indicator" class="dot offline" title="Agent runtime status"></span></section>
+  <div class="features" id="features">
+   <button class="feature" data-view="computers"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="14" rx="2"/><path d="M8 21h8m-4-4v4"/></svg><span>Computers</span></button>
+   <button class="feature" data-view="projects"><svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h5l2.5 3H20a2 2 0 0 1 2 2v9H3z"/></svg><span>Projects</span></button>
+   <button class="feature" data-view="library"><svg viewBox="0 0 24 24"><path d="M4 3h4v18H4zM10 3h4v18h-4zM16 3l4-1 3 18-4 1z"/></svg><span>Library</span></button>
+   <button class="feature" data-view="automations"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l4 2"/></svg><span>Automations</span></button>
+  </div>
+  <section id="tasks-screen" class="screen">
+   <div class="section-title"><h2>Pinned</h2><button class="quiet" data-view="pinned" aria-label="Show pinned">›</button></div>
+   <div id="pinned-list" class="stack"></div>
+   <div class="section-title next"><h2>Recent tasks</h2><span id="task-count" class="count"></span></div>
+   <div id="task-list" class="stack"></div>
+  </section>
+  <section id="agents-screen" class="screen hidden">
+   <div class="section-title"><h2>Saved agents</h2><button class="small-action" data-view="new-agent">+ New agent</button></div>
+   <p class="section-description">Pick a saved specialist or just type a task. The default agent is selected automatically.</p>
+   <div id="agent-list" class="agent-list"></div>
+  </section>
+ </main>
+ <button class="floating" data-view="compose" aria-label="New task"><svg viewBox="0 0 24 24"><path d="M12 5v14m-7-7h14"/></svg></button>
+ <nav class="bottom"><button data-tab="tasks" class="active">Tasks</button><button data-view="projects">Projects</button><button data-view="library">Library</button><button data-view="automations">Automations</button></nav>
+ </div>
+ <div id="overlay" class="overlay hidden" role="presentation"><div class="sheet" role="dialog" aria-modal="true" aria-labelledby="sheet-title"><div class="sheet-head"><h2 id="sheet-title">Task</h2><button id="close-sheet" class="icon-btn" aria-label="Close">✕</button></div><div id="sheet-body" class="sheet-body"></div></div></div>
+ <div id="toast" role="status"></div>
+ <script src="/assets/app.js" defer></script>
+</body></html>

@@ -188,7 +188,7 @@ class Store:
         self, name: str, size: int, media_type: str, project_id: str | None = None
     ) -> dict:
         v = {
-            "id": uid("file"),
+            "id": id or uid("file"),
             "name": name,
             "size": size,
             "media_type": media_type,

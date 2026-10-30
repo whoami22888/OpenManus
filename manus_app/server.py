@@ -19,7 +19,8 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from manus_app.runtime import SandboxExecutor, capabilities
-from manus_app.store import Store
+from manus_app.store import Store, uid
+from manus_app.remote_files import load_file_store
 
 
 STATIC = Path(__file__).parent / "static"
@@ -70,7 +71,17 @@ def create_app(
     root = Path(data_dir or os.getenv("MANUS_DATA_DIR", "./.manus-data"))
     root.mkdir(parents=True, exist_ok=True)
     (root / "files").mkdir(exist_ok=True)
-    db = Store(str(root / "workspace.sqlite3"))
+    dsn = os.getenv("MANUS_DATABASE_URL")
+    remote_files = load_file_store()
+    if dsn:
+        from manus_app.pg_store import PostgresStore
+        if remote_files is None:
+            raise ValueError("Remote database requires durable Supabase Storage")
+        db = PostgresStore(dsn)
+    else:
+        if os.getenv("MANUS_DURABLE_REQUIRED") == "1":
+            raise ValueError("Durable mode requires MANUS_DATABASE_URL and Supabase Storage")
+        db = Store(str(root / "workspace.sqlite3"))
     token = app_token if app_token is not None else os.getenv("MANUS_APP_TOKEN", "")
     if token and len(token) < 24:
         raise ValueError("MANUS_APP_TOKEN must be at least 24 characters")
@@ -193,13 +204,18 @@ def create_app(
                             continue
                         if item.stat().st_size > 20 * 1024 * 1024:
                             continue
+                        file_id = uid("file")
+                        if remote_files:
+                            remote_files.put(file_id, item.read_bytes())
+                        else:
+                            shutil.copyfile(item, root / "files" / file_id)
                         file = db.add_file(
                             str(item.relative_to(artifact_dir))[:180],
                             item.stat().st_size,
                             "application/octet-stream",
                             current["project_id"],
+                            id=file_id,
                         )
-                        shutil.copyfile(item, root / "files" / file["id"])
                         db.event(
                             task_id, "artifact", "Saved " + file["name"] + " to Library"
                         )
@@ -337,20 +353,27 @@ def create_app(
             raise HTTPException(413, "Maximum file size is 20 MB")
         if not file.filename:
             raise HTTPException(422, "Filename is required")
-        record = db.add_file(
-            Path(file.filename).name[:180],
-            len(content),
-            file.content_type or "application/octet-stream",
-            project_id,
+        file_id = uid("file")
+        if remote_files:
+            remote_files.put(file_id, content)
+        else:
+            (root / "files" / file_id).write_bytes(content)
+        return db.add_file(
+            Path(file.filename).name[:180], len(content),
+            file.content_type or "application/octet-stream", project_id, id=file_id
         )
-        (root / "files" / record["id"]).write_bytes(content)
-        return record
 
     @app.get("/api/files/{id}", dependencies=[Depends(auth)])
     def get_file(id: str):
         record = db.one("files", id)
         if not record:
             raise HTTPException(404, "File not found")
+        if remote_files:
+            from fastapi.responses import Response
+            data = remote_files.get(id)
+            from urllib.parse import quote
+            return Response(data, media_type="application/octet-stream",
+                            headers={"Content-Disposition": "attachment; filename*=UTF-8''" + quote(record["name"])})
         return FileResponse(
             root / "files" / id,
             media_type="application/octet-stream",

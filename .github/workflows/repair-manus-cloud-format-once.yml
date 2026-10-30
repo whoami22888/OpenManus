@@ -1,0 +1,42 @@
+name: One-time Manus cloud formatting repair
+on:
+  push:
+    branches: [feat/manus-integrated-app]
+    paths: ['.github/workflows/repair-manus-cloud-format-once.yml']
+permissions:
+  contents: write
+jobs:
+  format:
+    if: github.repository == 'whoami22888/OpenManus' && github.ref == 'refs/heads/feat/manus-integrated-app'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+          ref: ${{ github.sha }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install canonical formatter
+        run: pip install pre-commit
+      - name: Format using repository's existing pre-commit hooks
+        run: |
+          set -euo pipefail
+          for pass in 1 2 3 4; do
+            if pre-commit run --all-files; then
+              echo "Formatting clean"
+              break
+            fi
+          done
+          pre-commit run --all-files
+      - name: Commit formatter output and remove one-time workflow
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git rm .github/workflows/repair-manus-cloud-format-once.yml
+          git add -u
+          git add manus_app/ tests/
+          git diff --cached --stat
+          git commit -m "style: apply existing pre-commit hooks to cloud runner integration"
+          git push origin "HEAD:refs/heads/feat/manus-integrated-app"

@@ -2,3 +2,7 @@ fastapi>=0.115,<1
 uvicorn>=0.30,<1
 pydantic>=2,<3
 python-multipart>=0.0.18,<1
+
+# Durable free-tier database and artifact backend
+psycopg[binary]>=3.2,<4
+httpx>=0.27,<1

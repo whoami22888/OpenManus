@@ -37,7 +37,7 @@ jobs:
         with:
           python-version: '3.12'
       - name: Install app and test dependencies
-        run: python -m pip install -r requirements-workspace.txt pytest httpx psycopg[binary]
+        run: python -m pip install -r requirements-workspace.txt pytest httpx psycopg[binary] pytest-asyncio
       - name: Python compilation
         run: python -m compileall -q manus_app
       - name: Backend regression tests

@@ -17,17 +17,48 @@ class RuntimeUnavailable(RuntimeError):
 
 
 def capabilities() -> dict:
+    """Report only usable backends; never silently allocate billable cloud resources."""
     docker_socket = Path('/var/run/docker.sock').exists()
-    docker_py = importlib.util.find_spec('docker') is not None
-    model_key = bool(os.environ.get('OPENROUTER_API_KEY') or os.environ.get('OPENAI_API_KEY'))
-    # Existing config is supported, but without inspecting credentials we cannot assert it works.
-    model_present = model_key or bool(os.environ.get('MANUS_USE_EXISTING_CONFIG'))
-    return {'model_configured':model_present,
-            'sandbox_available':docker_socket and docker_py,
-            'ready':model_present and docker_socket and docker_py,
-            'mode':'OpenManus · Docker workspace',
-            'reason': ('ready' if model_present and docker_socket and docker_py else
-                       'Cloud workspace requires a Docker-capable host and configured free model credentials. No local host-shell fallback.')}
+    docker_sdk = importlib.util.find_spec('docker') is not None
+    daytona_sdk = importlib.util.find_spec('daytona') is not None
+    daytona_key = bool(os.environ.get('DAYTONA_API_KEY'))
+    # Explicit operator approval required: Daytona charges for running resources.
+    daytona_approved = os.environ.get('MANUS_DAYTONA_SPEND_APPROVED') == '1'
+    model_present = bool(
+        os.environ.get('OPENROUTER_API_KEY')
+        or os.environ.get('OPENAI_API_KEY')
+        or os.environ.get('MANUS_USE_EXISTING_CONFIG')
+    )
+    docker_ready = docker_socket and docker_sdk
+    daytona_ready = daytona_sdk and daytona_key and daytona_approved
+    provider = 'docker' if docker_ready else ('daytona' if daytona_ready else None)
+    ready = model_present and provider is not None
+    if not model_present:
+        reason = 'A legitimate model provider must be configured once on the server.'
+    elif docker_ready:
+        reason = 'Docker sandbox is available.'
+    elif daytona_sdk and daytona_key and not daytona_approved:
+        reason = 'Daytona code and credentials detected, but remote sandbox creation is disabled until its billable usage is explicitly approved.'
+    elif not daytona_key:
+        reason = 'Docker daemon unavailable. The repository also contains a Daytona remote sandbox adapter; no Daytona credentials are configured.'
+    else:
+        reason = 'No verified container sandbox is available. Do not substitute unisolated host shell execution.'
+    return {
+        'model_configured': model_present,
+        'sandbox_available': bool(provider),
+        'ready': ready,
+        'mode': 'OpenManus · Docker workspace' if provider != 'daytona' else 'OpenManus · Daytona cloud computer',
+        'provider': provider,
+        'existing_sandboxes': {
+            'docker': {'source_path': 'app/sandbox/core/sandbox.py', 'available': docker_ready},
+            'daytona': {'source_path': 'app/daytona/sandbox.py',
+                        'sdk_installed': daytona_sdk,
+                        'credentials_configured': daytona_key,
+                        'spend_approved': daytona_approved,
+                        'available': daytona_ready},
+        },
+        'reason': 'ready' if ready else reason,
+    }
 
 
 class SandboxExecutor:
@@ -46,6 +77,9 @@ class SandboxExecutor:
         caps=capabilities()
         if not caps['ready']:
             raise RuntimeUnavailable(caps['reason'])
+        if caps.get('provider') == 'daytona':
+            from manus_app.daytona_runtime import run_daytona
+            return await run_daytona(self, prompt, agent_instructions, event)
         # Import the existing OpenManus engine only after a sandbox and model are ready.
         from app.agent.manus import Manus
         from app.config import config, SandboxSettings
@@ -152,5 +186,8 @@ asyncio.run(main())
                 await sandbox.cleanup()
 
     async def cancel(self):
+        if getattr(self, 'remote_agent', None) is not None:
+            await self.remote_agent.cleanup()
+            self.remote_agent = None
         if self.sandbox:
             await self.sandbox.cleanup()

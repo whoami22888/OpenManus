@@ -55,6 +55,16 @@ class PinPayload(BaseModel):
     pinned: bool
 
 
+class WorkerUpdate(BaseModel):
+    status: str
+    result: str = Field(default="", max_length=200000)
+    error: str = Field(default="", max_length=400)
+
+
+class WorkerEvent(BaseModel):
+    message: str = Field(min_length=1, max_length=4000)
+
+
 class Executor(Protocol):
     async def run(self, prompt: str, agent_instructions: str, event):
         ...
@@ -397,14 +407,6 @@ def create_app(
         provided = authorization[7:] if authorization and authorization.startswith("Bearer ") else ""
         if not dispatcher or len(worker_token) < 24 or not hmac.compare_digest(provided, worker_token):
             raise HTTPException(401, "Worker not authorized")
-
-    class WorkerUpdate(BaseModel):
-        status: str
-        result: str = Field(default="", max_length=200000)
-        error: str = Field(default="", max_length=400)
-
-    class WorkerEvent(BaseModel):
-        message: str = Field(min_length=1, max_length=4000)
 
     @app.get("/internal/worker/jobs/{id}", dependencies=[Depends(worker_auth)])
     def worker_get(id: str):

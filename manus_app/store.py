@@ -185,7 +185,8 @@ class Store:
         return self.one(table, id)
 
     def add_file(
-        self, name: str, size: int, media_type: str, project_id: str | None = None
+        self, name: str, size: int, media_type: str, project_id: str | None = None,
+        id: str | None = None
     ) -> dict:
         v = {
             "id": id or uid("file"),

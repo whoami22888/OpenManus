@@ -18,10 +18,10 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
+from manus_app.github_actions import DispatchUnavailable, get_dispatcher
+from manus_app.remote_files import load_file_store
 from manus_app.runtime import SandboxExecutor, capabilities
 from manus_app.store import Store, uid
-from manus_app.remote_files import load_file_store
-from manus_app.github_actions import get_dispatcher, DispatchUnavailable
 
 
 STATIC = Path(__file__).parent / "static"
@@ -86,12 +86,15 @@ def create_app(
     remote_files = load_file_store()
     if dsn:
         from manus_app.pg_store import PostgresStore
+
         if remote_files is None:
             raise ValueError("Remote database requires durable Supabase Storage")
         db = PostgresStore(dsn)
     else:
         if os.getenv("MANUS_DURABLE_REQUIRED") == "1":
-            raise ValueError("Durable mode requires MANUS_DATABASE_URL and Supabase Storage")
+            raise ValueError(
+                "Durable mode requires MANUS_DATABASE_URL and Supabase Storage"
+            )
         db = Store(str(root / "workspace.sqlite3"))
     token = app_token if app_token is not None else os.getenv("MANUS_APP_TOKEN", "")
     if token and len(token) < 24:
@@ -100,10 +103,10 @@ def create_app(
         raise ValueError("Public deployment requires MANUS_APP_TOKEN")
     dispatcher = get_dispatcher()
     worker_token = os.getenv("MANUS_WORKER_TOKEN", "")
-    if dispatcher and (
-        not dsn or not remote_files or len(worker_token) < 24
-    ):
-        raise ValueError("GitHub runner requires durable database, storage, and worker secret")
+    if dispatcher and (not dsn or not remote_files or len(worker_token) < 24):
+        raise ValueError(
+            "GitHub runner requires durable database, storage, and worker secret"
+        )
     factory = executor_factory or SandboxExecutor
     running: dict[str, tuple[asyncio.Task, Executor]] = {}
     gate = asyncio.Semaphore(1)
@@ -247,12 +250,16 @@ def create_app(
     async def submit(payload: TaskPayload):
         exists("agents", payload.agent_id)
         exists("projects", payload.project_id)
-        task = db.create_task(payload.prompt.strip(), payload.project_id, payload.agent_id)
+        task = db.create_task(
+            payload.prompt.strip(), payload.project_id, payload.agent_id
+        )
         if dispatcher is not None:
             try:
                 await dispatcher.dispatch(task["id"])
             except (DispatchUnavailable, Exception) as error:
-                db.task_status(task["id"], "failed", error="Cloud runner dispatch unavailable")
+                db.task_status(
+                    task["id"], "failed", error="Cloud runner dispatch unavailable"
+                )
                 raise HTTPException(503, "Free cloud runner unavailable") from error
         else:
             job = asyncio.create_task(execute_task(task["id"]))
@@ -381,8 +388,11 @@ def create_app(
         else:
             (root / "files" / file_id).write_bytes(content)
         return db.add_file(
-            Path(file.filename).name[:180], len(content),
-            file.content_type or "application/octet-stream", project_id, id=file_id
+            Path(file.filename).name[:180],
+            len(content),
+            file.content_type or "application/octet-stream",
+            project_id,
+            id=file_id,
         )
 
     @app.get("/api/files/{id}", dependencies=[Depends(auth)])
@@ -392,20 +402,35 @@ def create_app(
             raise HTTPException(404, "File not found")
         if remote_files:
             from fastapi.responses import Response
+
             data = remote_files.get(id)
             from urllib.parse import quote
-            return Response(data, media_type="application/octet-stream",
-                            headers={"Content-Disposition": "attachment; filename*=UTF-8''" + quote(record["name"])})
+
+            return Response(
+                data,
+                media_type="application/octet-stream",
+                headers={
+                    "Content-Disposition": "attachment; filename*=UTF-8''"
+                    + quote(record["name"])
+                },
+            )
         return FileResponse(
             root / "files" / id,
             media_type="application/octet-stream",
             filename=record["name"],
         )
 
-
     def worker_auth(authorization: str | None = Header(default=None)):
-        provided = authorization[7:] if authorization and authorization.startswith("Bearer ") else ""
-        if not dispatcher or len(worker_token) < 24 or not hmac.compare_digest(provided, worker_token):
+        provided = (
+            authorization[7:]
+            if authorization and authorization.startswith("Bearer ")
+            else ""
+        )
+        if (
+            not dispatcher
+            or len(worker_token) < 24
+            or not hmac.compare_digest(provided, worker_token)
+        ):
             raise HTTPException(401, "Worker not authorized")
 
     @app.get("/internal/worker/jobs/{id}", dependencies=[Depends(worker_auth)])
@@ -414,9 +439,13 @@ def create_app(
         if not record:
             raise HTTPException(404, "Task not found")
         agent = db.one("agents", record["agent_id"] or "default")
-        return {"id": record["id"], "status": record["status"],
-                "prompt": record["prompt"], "project_id": record["project_id"],
-                "agent_instructions": agent["instructions"] if agent else ""}
+        return {
+            "id": record["id"],
+            "status": record["status"],
+            "prompt": record["prompt"],
+            "project_id": record["project_id"],
+            "agent_instructions": agent["instructions"] if agent else "",
+        }
 
     @app.post("/internal/worker/jobs/{id}/status", dependencies=[Depends(worker_auth)])
     def worker_status(id: str, payload: WorkerUpdate):
@@ -426,7 +455,9 @@ def create_app(
         if payload.status == "running" and record["status"] == "queued":
             return db.task_status(id, "running")
         if payload.status in ("completed", "failed") and record["status"] == "running":
-            return db.task_status(id, payload.status, result=payload.result, error=payload.error)
+            return db.task_status(
+                id, payload.status, result=payload.result, error=payload.error
+            )
         raise HTTPException(409, "Invalid or cancelled task state transition")
 
     @app.post("/internal/worker/jobs/{id}/events", dependencies=[Depends(worker_auth)])
@@ -441,20 +472,34 @@ def create_app(
         record = db.one("tasks", id)
         if not record:
             raise HTTPException(404, "Task not found")
-        return [{"id": x["id"], "name": x["name"]}
-                for x in db.all("files")
-                if x["project_id"] in (None, record["project_id"])]
+        return [
+            {"id": x["id"], "name": x["name"]}
+            for x in db.all("files")
+            if x["project_id"] in (None, record["project_id"])
+        ]
 
-    @app.get("/internal/worker/jobs/{id}/files/{file_id}", dependencies=[Depends(worker_auth)])
+    @app.get(
+        "/internal/worker/jobs/{id}/files/{file_id}",
+        dependencies=[Depends(worker_auth)],
+    )
     def worker_file(id: str, file_id: str):
         record = db.one("tasks", id)
         obj = db.one("files", file_id)
-        if not record or not obj or obj["project_id"] not in (None, record["project_id"]):
+        if (
+            not record
+            or not obj
+            or obj["project_id"] not in (None, record["project_id"])
+        ):
             raise HTTPException(404, "File unavailable")
         from fastapi.responses import Response
-        return Response(remote_files.get(file_id), media_type="application/octet-stream")
 
-    @app.post("/internal/worker/jobs/{id}/artifacts", dependencies=[Depends(worker_auth)])
+        return Response(
+            remote_files.get(file_id), media_type="application/octet-stream"
+        )
+
+    @app.post(
+        "/internal/worker/jobs/{id}/artifacts", dependencies=[Depends(worker_auth)]
+    )
     async def worker_artifact(id: str, file: UploadFile = File(...)):
         record = db.one("tasks", id)
         if not record or record["status"] != "running":
@@ -466,8 +511,10 @@ def create_app(
         remote_files.put(file_id, data)
         obj = db.add_file(
             Path(file.filename or "artifact").name[:180],
-            len(data), file.content_type or "application/octet-stream",
-            record["project_id"], id=file_id
+            len(data),
+            file.content_type or "application/octet-stream",
+            record["project_id"],
+            id=file_id,
         )
         db.event(id, "artifact", "Saved " + obj["name"] + " to Library")
         return obj

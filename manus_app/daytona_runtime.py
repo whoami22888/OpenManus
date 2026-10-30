@@ -12,8 +12,9 @@ from pathlib import Path
 from typing import Callable
 
 
-async def run_daytona(executor, prompt: str, agent_instructions: str,
-                      event: Callable[[str], None]) -> str:
+async def run_daytona(
+    executor, prompt: str, agent_instructions: str, event: Callable[[str], None]
+) -> str:
     if os.environ.get("MANUS_DAYTONA_SPEND_APPROVED") != "1":
         raise RuntimeError("Daytona remote sandbox not approved for metered use")
     key = os.environ.get("DAYTONA_API_KEY", "")
@@ -22,6 +23,7 @@ async def run_daytona(executor, prompt: str, agent_instructions: str,
 
     # Set configuration BEFORE importing modules that construct Daytona clients.
     from app.config import config
+
     config.daytona.daytona_api_key = key
     # Never use the checked-in example/default VNC password.
     config.daytona.VNC_password = secrets.token_urlsafe(32)
@@ -56,18 +58,26 @@ async def run_daytona(executor, prompt: str, agent_instructions: str,
         input_dir = getattr(executor, "input_dir", None)
         if input_dir:
             for item in sorted(Path(input_dir).iterdir()):
-                if item.is_file() and not item.is_symlink() and item.stat().st_size <= 20*1024*1024:
+                if (
+                    item.is_file()
+                    and not item.is_symlink()
+                    and item.stat().st_size <= 20 * 1024 * 1024
+                ):
                     await asyncio.to_thread(
-                        sandbox.fs.upload_file, item.read_bytes(),
-                        "/workspace/input/" + item.name
+                        sandbox.fs.upload_file,
+                        item.read_bytes(),
+                        "/workspace/input/" + item.name,
                     )
 
         agent.system_prompt += (
-            "\n\nAgent instructions:\n" + agent_instructions[:8000]
+            "\n\nAgent instructions:\n"
+            + agent_instructions[:8000]
             + "\n\nInput files: /workspace/input. Save all deliverables in"
-              " /workspace/output for automatic library collection."
+            " /workspace/output for automatic library collection."
         )
-        event("Existing OpenManus remote browser, terminal, files and vision tools ready")
+        event(
+            "Existing OpenManus remote browser, terminal, files and vision tools ready"
+        )
         result = await agent.run(prompt)
 
         output_dir = getattr(executor, "output_dir", None)
@@ -88,11 +98,11 @@ async def run_daytona(executor, prompt: str, agent_instructions: str,
                     rpath, lpath = remote + "/" + name, local / name
                     if entry.is_dir:
                         if depth < 3:
-                            pending.append((rpath, lpath, depth+1))
-                    elif entry.size <= 20*1024*1024 and copied < 50:
+                            pending.append((rpath, lpath, depth + 1))
+                    elif entry.size <= 20 * 1024 * 1024 and copied < 50:
                         lpath.parent.mkdir(parents=True, exist_ok=True)
                         data = await asyncio.to_thread(sandbox.fs.download_file, rpath)
-                        if len(data) <= 20*1024*1024:
+                        if len(data) <= 20 * 1024 * 1024:
                             lpath.write_bytes(data)
                             copied += 1
             if copied:

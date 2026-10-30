@@ -1,0 +1,44 @@
+# $0 Manus Hybrid coordination frontend/API. Never upgrade the instance.
+# This template fails closed without independently provisioned durable free storage
+# and a private zero-charge-confirmed GitHub Actions runner.
+services:
+  - type: web
+    name: manus-hybrid-workspace
+    runtime: python
+    plan: free
+    region: singapore
+    repo: https://github.com/whoami22888/OpenManus
+    branch: feat/manus-integrated-app
+    autoDeployTrigger: off
+    buildCommand: pip install -r requirements-workspace.txt
+    startCommand: uvicorn manus_app.server:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.12.9"
+      - key: MANUS_PUBLIC_MODE
+        value: "1"
+      - key: MANUS_APP_TOKEN
+        generateValue: true
+      - key: MANUS_DATA_DIR
+        value: /tmp/manus-scratch
+      - key: MANUS_DURABLE_REQUIRED
+        value: "1"
+      - key: MANUS_DATABASE_URL
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: MANUS_RUNNER_BACKEND
+        value: github
+      - key: MANUS_GITHUB_REPO
+        sync: false
+      - key: MANUS_GITHUB_ACTIONS_TOKEN
+        sync: false
+      - key: MANUS_WORKER_TOKEN
+        sync: false
+      - key: MANUS_GITHUB_NO_CHARGE_VERIFIED
+        value: "0"
+      - key: MANUS_DAYTONA_SPEND_APPROVED
+        value: "0"

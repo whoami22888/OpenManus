@@ -1,16 +1,18 @@
-import os
-import sys
-import shutil
 import asyncio
+import os
+import shutil
+import sys
 from abc import ABC, abstractmethod
-from typing import Dict, Optional, Protocol
+from typing import Dict, Optional
 
-from app.config import SandboxSettings, PROJECT_ROOT
-from app.sandbox.core.sandbox import DockerSandbox
+from app.config import PROJECT_ROOT, SandboxSettings
 from app.logger import logger
+from app.sandbox.core.sandbox import DockerSandbox
+
 
 try:
     import aiofiles
+
     HAS_AIOFILES = True
 except ImportError:
     HAS_AIOFILES = False
@@ -55,7 +57,12 @@ class BaseSandboxClient(ABC):
 class LocalShellSession:
     """An interactive shell session running locally on the host, emulating container bash."""
 
-    def __init__(self, cwd: str, env_vars: Optional[Dict[str, str]] = None, timeout: float = 120.0):
+    def __init__(
+        self,
+        cwd: str,
+        env_vars: Optional[Dict[str, str]] = None,
+        timeout: float = 120.0,
+    ):
         self.cwd = cwd
         self.env_vars = env_vars or {}
         self._started = False
@@ -93,10 +100,7 @@ class LocalShellSession:
             # It is only used here as a best-effort process grouping fallback for legacy Python versions.
             kwargs["preexec_fn"] = os.setsid
 
-        self._process = await asyncio.create_subprocess_shell(
-            shell_cmd,
-            **kwargs
-        )
+        self._process = await asyncio.create_subprocess_shell(shell_cmd, **kwargs)
         self._started = True
 
     def stop(self):
@@ -113,9 +117,13 @@ class LocalShellSession:
         if not self._started:
             raise RuntimeError("Session has not started.")
         if self._process.returncode is not None:
-            raise RuntimeError(f"Shell has exited with returncode {self._process.returncode}")
+            raise RuntimeError(
+                f"Shell has exited with returncode {self._process.returncode}"
+            )
         if self._timed_out:
-            raise RuntimeError("Shell session timed out previously and must be restarted.")
+            raise RuntimeError(
+                "Shell session timed out previously and must be restarted."
+            )
 
         # Timeout handling
         exec_timeout = timeout or self._timeout
@@ -132,11 +140,16 @@ class LocalShellSession:
                 async with asyncio.timeout(exec_timeout):
                     data = await self._process.stdout.readuntil(self._sentinel.encode())
             else:
-                data = await asyncio.wait_for(self._process.stdout.readuntil(self._sentinel.encode()), exec_timeout)
-            output = data[:-len(self._sentinel)].decode("utf-8", errors="replace")
+                data = await asyncio.wait_for(
+                    self._process.stdout.readuntil(self._sentinel.encode()),
+                    exec_timeout,
+                )
+            output = data[: -len(self._sentinel)].decode("utf-8", errors="replace")
         except (asyncio.TimeoutError, TimeoutError):
             self._timed_out = True
-            raise TimeoutError(f"Command execution timed out after {exec_timeout} seconds") from None
+            raise TimeoutError(
+                f"Command execution timed out after {exec_timeout} seconds"
+            ) from None
 
         if output.endswith("\n"):
             output = output[:-1]
@@ -160,14 +173,16 @@ class LocalSubprocessSandboxClient(BaseSandboxClient):
         volume_bindings: Optional[Dict[str, str]] = None,
     ) -> None:
         self.config = config or SandboxSettings()
-        self.sandbox_dir = os.path.abspath(os.path.join(PROJECT_ROOT, "workspace", "sandbox"))
+        self.sandbox_dir = os.path.abspath(
+            os.path.join(PROJECT_ROOT, "workspace", "sandbox")
+        )
         os.makedirs(self.sandbox_dir, exist_ok=True)
-        
+
         # Initialize terminal/shell session
         self.session = LocalShellSession(
-            self.sandbox_dir, 
-            env_vars={"PYTHONUNBUFFERED": "1"}, 
-            timeout=float(self.config.timeout)
+            self.sandbox_dir,
+            env_vars={"PYTHONUNBUFFERED": "1"},
+            timeout=float(self.config.timeout),
         )
         await self.session.start()
 
@@ -188,7 +203,11 @@ class LocalSubprocessSandboxClient(BaseSandboxClient):
             if os.path.exists(dst):
                 if os.path.isdir(dst):
                     # Note: dirs_exist_ok is supported in Python 3.8+ (OpenManus requires Python 3.12+)
-                    shutil.copytree(src, os.path.join(dst, os.path.basename(src)), dirs_exist_ok=True)
+                    shutil.copytree(
+                        src,
+                        os.path.join(dst, os.path.basename(src)),
+                        dirs_exist_ok=True,
+                    )
                 else:
                     raise RuntimeError(f"Cannot copy directory to a file: {dst}")
             else:
@@ -224,7 +243,9 @@ class LocalSubprocessSandboxClient(BaseSandboxClient):
         if not os.path.exists(resolved):
             raise FileNotFoundError(f"File not found: {path}")
         if HAS_AIOFILES:
-            async with aiofiles.open(resolved, mode="r", encoding="utf-8", errors="replace") as f:
+            async with aiofiles.open(
+                resolved, mode="r", encoding="utf-8", errors="replace"
+            ) as f:
                 return await f.read()
         else:
             with open(resolved, mode="r", encoding="utf-8", errors="replace") as f:
@@ -271,6 +292,7 @@ class LocalSandboxClient(BaseSandboxClient):
         """
         try:
             import docker
+
             client = docker.from_env()
             try:
                 client.ping()

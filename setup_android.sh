@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # OpenManus Android (Termux + PRoot) Automated Installer
-# This script automates setting up the full Linux environment, compile stack, 
+# This script automates setting up the full Linux environment, compile stack,
 # Chromium, Node.js, and Python dependencies required to run OpenManus on Android.
 
 set -e
@@ -15,16 +15,16 @@ prompt_yes_no() {
     local prompt_msg="$1"
     local default_val="$2"
     local user_input
-    
+
     if [ "$default_val" = "Y" ]; then
         prompt_msg="$prompt_msg [Y/n]: "
     else
         prompt_msg="$prompt_msg [y/N]: "
     fi
-    
+
     read -p "$prompt_msg" user_input
     user_input=$(echo "$user_input" | tr '[:upper:]' '[:lower:]')
-    
+
     if [ -z "$user_input" ]; then
         if [ "$default_val" = "Y" ]; then
             return 0
@@ -32,7 +32,7 @@ prompt_yes_no() {
             return 1
         fi
     fi
-    
+
     if [ "$user_input" = "y" ] || [ "$user_input" = "yes" ]; then
         return 0
     else
@@ -44,7 +44,7 @@ prompt_yes_no() {
 # PROOT_DISTRO_DEV is set when this script re-invokes itself inside PRoot to prevent infinite recursion
 if [ -d "/data/data/com.termux" ] && [ -z "$PROOT_DISTRO_DEV" ]; then
     echo "Status: Running inside Termux (Host Android environment)"
-    
+
     # Ensure proot-distro is installed
     if ! command -v proot-distro >/dev/null 2>&1; then
         echo "PRoot Distro is required to run a standard Linux environment inside Termux."
@@ -57,7 +57,7 @@ if [ -d "/data/data/com.termux" ] && [ -z "$PROOT_DISTRO_DEV" ]; then
             exit 1
         fi
     fi
-    
+
     # Check for installed distributions
     echo "Checking for Ubuntu distribution inside PRoot..."
     if ! proot-distro list | grep -A 5 "ubuntu" | grep -q "Installed: yes"; then
@@ -70,12 +70,12 @@ if [ -d "/data/data/com.termux" ] && [ -z "$PROOT_DISTRO_DEV" ]; then
             exit 1
         fi
     fi
-    
+
     # Set up launcher and invoke setup inside Ubuntu
     echo "Ubuntu inside PRoot is ready."
     REPO_PATH=$(pwd)
     echo "Sharing and executing setup inside PRoot Ubuntu..."
-    
+
     # We copy the script and run it inside PRoot
     export PROOT_DISTRO_DEV=1
     SCRIPT_NAME=$(basename "${BASH_SOURCE[0]}")
@@ -83,7 +83,7 @@ if [ -d "/data/data/com.termux" ] && [ -z "$PROOT_DISTRO_DEV" ]; then
         echo "Error: Installation inside PRoot Ubuntu failed."
         exit 1
     }
-    
+
     echo "=========================================================="
     echo "Setup finished! You can now start OpenManus with:"
     echo "  proot-distro login ubuntu --shared-tmp -- bash -c \"cd \\\"$REPO_PATH\\\" && ./run_android.sh\""

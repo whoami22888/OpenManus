@@ -1,5 +1,6 @@
-# Manus Hybrid staging only. No paid resources or model-provider credits.
-# The Render free instance cannot launch Docker/Daytona cloud computers.
+# $0 Manus Hybrid coordination frontend/API. Never upgrade the instance.
+# This template fails closed without independently provisioned durable free storage
+# and a private zero-charge-confirmed GitHub Actions runner.
 services:
   - type: web
     name: manus-hybrid-workspace
@@ -20,6 +21,24 @@ services:
       - key: MANUS_APP_TOKEN
         generateValue: true
       - key: MANUS_DATA_DIR
-        value: /tmp/manus-workspace
+        value: /tmp/manus-scratch
+      - key: MANUS_DURABLE_REQUIRED
+        value: "1"
+      - key: MANUS_DATABASE_URL
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: MANUS_RUNNER_BACKEND
+        value: github
+      - key: MANUS_GITHUB_REPO
+        sync: false
+      - key: MANUS_GITHUB_ACTIONS_TOKEN
+        sync: false
+      - key: MANUS_WORKER_TOKEN
+        sync: false
+      - key: MANUS_GITHUB_NO_CHARGE_VERIFIED
+        value: "0"
       - key: MANUS_DAYTONA_SPEND_APPROVED
         value: "0"

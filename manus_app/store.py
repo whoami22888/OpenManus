@@ -269,3 +269,14 @@ class Store:
                 "UPDATE tasks SET status='interrupted', error='Agent server restarted; rerun task to retry.',updated=? WHERE status IN ('queued','running')",
                 (time.time(),),
             )
+
+    def recover_stale(self, age_seconds: int = 2700):
+        """Only expire remote jobs older than the bounded worker lifetime."""
+        threshold = time.time() - age_seconds
+        with self._db() as db:
+            db.execute(
+                "UPDATE tasks SET status='interrupted', "
+                "error='Cloud worker timed out or lost contact; retry this task.',updated=? "
+                "WHERE status IN ('queued','running') AND updated<?",
+                (time.time(), threshold),
+            )

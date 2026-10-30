@@ -113,7 +113,10 @@ def create_app(
 
     @asynccontextmanager
     async def lifespan(application):
-        db.recover()
+        if dispatcher is not None:
+            db.recover_stale()
+        else:
+            db.recover()
         schedule = asyncio.create_task(scheduler()) if scheduler_enabled else None
         application.state.scheduler_task = schedule
         try:

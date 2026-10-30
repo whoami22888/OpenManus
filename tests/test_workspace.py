@@ -253,3 +253,19 @@ def test_completed_task_generated_files_saved_in_library(tmp_path):
             c.get("/api/files/" + files[0]["id"], headers=AUTH).content
             == b"# Created by agent"
         )
+
+
+def test_recent_remote_job_survives_restart(tmp_path):
+    store = Store(str(tmp_path / "remote.sqlite"))
+    task = store.create_task("preserve active remote job")
+    store.recover_stale(age_seconds=2700)
+    assert store.one("tasks", task["id"])["status"] == "queued"
+
+
+def test_expired_remote_job_interrupted(tmp_path):
+    store = Store(str(tmp_path / "remote.sqlite"))
+    task = store.create_task("remote job whose runner disappeared")
+    with store._db() as db:
+        db.execute("UPDATE tasks SET updated=0 WHERE id=?", (task["id"],))
+    store.recover_stale(age_seconds=2700)
+    assert store.one("tasks", task["id"])["status"] == "interrupted"

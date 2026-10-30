@@ -265,6 +265,17 @@ class PostgresStore:
                 (time.time(),),
             )
 
+
+    def recover_stale(self, age_seconds: int = 2700):
+        threshold = time.time() - age_seconds
+        with self._db() as db:
+            db.execute(
+                "UPDATE manus_private.tasks SET status='interrupted', "
+                "error='Cloud worker timed out or lost contact; retry this task.',updated=%s "
+                "WHERE status IN ('queued','running') AND updated<%s",
+                (time.time(), threshold),
+            )
+
     def delete_file(self, id: str):
         with self._db() as db:
             db.execute("DELETE FROM manus_private.files WHERE id=%s", (id,))

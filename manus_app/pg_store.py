@@ -265,7 +265,6 @@ class PostgresStore:
                 (time.time(),),
             )
 
-
     def recover_stale(self, age_seconds: int = 2700):
         threshold = time.time() - age_seconds
         with self._db() as db:

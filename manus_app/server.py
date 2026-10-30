@@ -531,10 +531,13 @@ def create_app(
         dispatched = 0
         for item in due:
             try:
-                await submit(TaskPayload(
-                    prompt=item["prompt"], project_id=item["project_id"],
-                    agent_id=item["agent_id"]
-                ))
+                await submit(
+                    TaskPayload(
+                        prompt=item["prompt"],
+                        project_id=item["project_id"],
+                        agent_id=item["agent_id"],
+                    )
+                )
                 dispatched += 1
             except HTTPException:
                 # submit records an explicit failed task; no silent success.

@@ -7,7 +7,7 @@ on:
       - 'requirements-workspace.txt'
       - '.github/workflows/manus-workspace.yml'
   push:
-    branches: [main]
+    branches: [main, feat/manus-integrated-app]
     paths:
       - 'manus_app/**'
       - 'tests/test_workspace.py'

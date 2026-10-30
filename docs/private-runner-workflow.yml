@@ -1,0 +1,40 @@
+# Copy this to .github/workflows/manus-agent-job.yml in a *private* runner repository.
+# Do NOT place user prompt/input secrets in the public OpenManus workflow logs.
+name: Manus isolated cloud task
+on:
+  workflow_dispatch:
+    inputs:
+      task_id:
+        description: Opaque Manus task ID
+        type: string
+        required: true
+permissions:
+  contents: read
+concurrency:
+  group: manus-task-${{ inputs.task_id }}
+  cancel-in-progress: false
+jobs:
+  task:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout public engine code
+        uses: actions/checkout@v4
+        with:
+          repository: whoami22888/OpenManus
+          ref: main
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install existing OpenManus runtime
+        run: pip install -r requirements.txt -r requirements-workspace.txt
+      - name: Verify Docker execution host
+        run: docker info --format '{{.ServerVersion}}'
+      - name: Run isolated Manus task
+        env:
+          MANUS_SERVICE_URL: ${{ vars.MANUS_SERVICE_URL }}
+          MANUS_WORKER_TOKEN: ${{ secrets.MANUS_WORKER_TOKEN }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          MANUS_TASK_ID: ${{ inputs.task_id }}
+        run: python -m manus_app.actions_worker

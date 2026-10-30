@@ -6,6 +6,7 @@ on:
       - 'tests/test_workspace.py'
       - 'tests/test_existing_sandbox.py'
       - 'tests/test_durable_backends.py'
+      - 'tests/test_github_runner.py'
       - 'requirements-workspace.txt'
       - '.github/workflows/manus-workspace.yml'
   push:
@@ -15,6 +16,7 @@ on:
       - 'tests/test_workspace.py'
       - 'tests/test_existing_sandbox.py'
       - 'tests/test_durable_backends.py'
+      - 'tests/test_github_runner.py'
       - 'requirements-workspace.txt'
 permissions:
   contents: read

@@ -21,6 +21,7 @@ from pydantic import BaseModel, Field
 from manus_app.runtime import SandboxExecutor, capabilities
 from manus_app.store import Store, uid
 from manus_app.remote_files import load_file_store
+from manus_app.github_actions import get_dispatcher, DispatchUnavailable
 
 
 STATIC = Path(__file__).parent / "static"
@@ -87,6 +88,12 @@ def create_app(
         raise ValueError("MANUS_APP_TOKEN must be at least 24 characters")
     if not token and os.getenv("MANUS_PUBLIC_MODE") == "1":
         raise ValueError("Public deployment requires MANUS_APP_TOKEN")
+    dispatcher = get_dispatcher()
+    worker_token = os.getenv("MANUS_WORKER_TOKEN", "")
+    if dispatcher and (
+        not dsn or not remote_files or len(worker_token) < 24
+    ):
+        raise ValueError("GitHub runner requires durable database, storage, and worker secret")
     factory = executor_factory or SandboxExecutor
     running: dict[str, tuple[asyncio.Task, Executor]] = {}
     gate = asyncio.Semaphore(1)
@@ -119,6 +126,7 @@ def create_app(
         lifespan=lifespan,
     )
     app.state.store = db
+    app.state.dispatcher = dispatcher
     app.state.running = running
     app.state.scheduler_task = None
 
@@ -226,15 +234,19 @@ def create_app(
                     )
                 running.pop(task_id, None)
 
-    def submit(payload: TaskPayload):
+    async def submit(payload: TaskPayload):
         exists("agents", payload.agent_id)
         exists("projects", payload.project_id)
-        task = db.create_task(
-            payload.prompt.strip(), payload.project_id, payload.agent_id
-        )
-        job = asyncio.create_task(execute_task(task["id"]))
-        # Keep a strong reference until the worker starts (also catches queued tasks).
-        running[task["id"]] = (job, None)
+        task = db.create_task(payload.prompt.strip(), payload.project_id, payload.agent_id)
+        if dispatcher is not None:
+            try:
+                await dispatcher.dispatch(task["id"])
+            except (DispatchUnavailable, Exception) as error:
+                db.task_status(task["id"], "failed", error="Cloud runner dispatch unavailable")
+                raise HTTPException(503, "Free cloud runner unavailable") from error
+        else:
+            job = asyncio.create_task(execute_task(task["id"]))
+            running[task["id"]] = (job, None)
         return task
 
     async def scheduler():
@@ -266,7 +278,7 @@ def create_app(
 
     @app.post("/api/tasks", status_code=202, dependencies=[Depends(auth)])
     async def create_task(payload: TaskPayload):
-        return submit(payload)
+        return await submit(payload)
 
     @app.get("/api/tasks/{id}", dependencies=[Depends(auth)])
     def get_task(id: str):
@@ -301,7 +313,7 @@ def create_app(
         record = db.one("tasks", id)
         if not record:
             raise HTTPException(404, "Task not found")
-        return submit(
+        return await submit(
             TaskPayload(
                 prompt=record["prompt"],
                 project_id=record["project_id"],
@@ -379,6 +391,84 @@ def create_app(
             media_type="application/octet-stream",
             filename=record["name"],
         )
+
+
+    def worker_auth(authorization: str | None = Header(default=None)):
+        provided = authorization[7:] if authorization and authorization.startswith("Bearer ") else ""
+        if not dispatcher or len(worker_token) < 24 or not hmac.compare_digest(provided, worker_token):
+            raise HTTPException(401, "Worker not authorized")
+
+    class WorkerUpdate(BaseModel):
+        status: str
+        result: str = Field(default="", max_length=200000)
+        error: str = Field(default="", max_length=400)
+
+    class WorkerEvent(BaseModel):
+        message: str = Field(min_length=1, max_length=4000)
+
+    @app.get("/internal/worker/jobs/{id}", dependencies=[Depends(worker_auth)])
+    def worker_get(id: str):
+        record = db.one("tasks", id)
+        if not record:
+            raise HTTPException(404, "Task not found")
+        agent = db.one("agents", record["agent_id"] or "default")
+        return {"id": record["id"], "status": record["status"],
+                "prompt": record["prompt"], "project_id": record["project_id"],
+                "agent_instructions": agent["instructions"] if agent else ""}
+
+    @app.post("/internal/worker/jobs/{id}/status", dependencies=[Depends(worker_auth)])
+    def worker_status(id: str, payload: WorkerUpdate):
+        record = db.one("tasks", id)
+        if not record:
+            raise HTTPException(404, "Task not found")
+        if payload.status == "running" and record["status"] == "queued":
+            return db.task_status(id, "running")
+        if payload.status in ("completed", "failed") and record["status"] == "running":
+            return db.task_status(id, payload.status, result=payload.result, error=payload.error)
+        raise HTTPException(409, "Invalid or cancelled task state transition")
+
+    @app.post("/internal/worker/jobs/{id}/events", dependencies=[Depends(worker_auth)])
+    def worker_event(id: str, payload: WorkerEvent):
+        if not db.one("tasks", id):
+            raise HTTPException(404, "Task not found")
+        db.event(id, "progress", payload.message)
+        return {"ok": True}
+
+    @app.get("/internal/worker/jobs/{id}/files", dependencies=[Depends(worker_auth)])
+    def worker_files(id: str):
+        record = db.one("tasks", id)
+        if not record:
+            raise HTTPException(404, "Task not found")
+        return [{"id": x["id"], "name": x["name"]}
+                for x in db.all("files")
+                if x["project_id"] in (None, record["project_id"])]
+
+    @app.get("/internal/worker/jobs/{id}/files/{file_id}", dependencies=[Depends(worker_auth)])
+    def worker_file(id: str, file_id: str):
+        record = db.one("tasks", id)
+        obj = db.one("files", file_id)
+        if not record or not obj or obj["project_id"] not in (None, record["project_id"]):
+            raise HTTPException(404, "File unavailable")
+        from fastapi.responses import Response
+        return Response(remote_files.get(file_id), media_type="application/octet-stream")
+
+    @app.post("/internal/worker/jobs/{id}/artifacts", dependencies=[Depends(worker_auth)])
+    async def worker_artifact(id: str, file: UploadFile = File(...)):
+        record = db.one("tasks", id)
+        if not record or record["status"] != "running":
+            raise HTTPException(409, "Job not running")
+        data = await file.read(20 * 1024 * 1024 + 1)
+        if not data or len(data) > 20 * 1024 * 1024:
+            raise HTTPException(413, "Artifact invalid or too large")
+        file_id = uid("file")
+        remote_files.put(file_id, data)
+        obj = db.add_file(
+            Path(file.filename or "artifact").name[:180],
+            len(data), file.content_type or "application/octet-stream",
+            record["project_id"], id=file_id
+        )
+        db.event(id, "artifact", "Saved " + obj["name"] + " to Library")
+        return obj
 
     @app.get("/api/computers", dependencies=[Depends(auth)])
     def computers():

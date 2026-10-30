@@ -1,0 +1,50 @@
+name: One-off Manus formatting repair
+on:
+  push:
+    branches:
+      - feat/manus-integrated-app
+    paths:
+      - '.github/workflows/manus-format-once.yml'
+permissions:
+  contents: write
+jobs:
+  format:
+    if: github.repository == 'whoami22888/OpenManus'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout exact triggering SHA
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: true
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install pinned formatting tools
+        run: python -m pip install pre-commit black==23.1.0 isort==5.12.0 autoflake==2.0.1
+      - name: Apply all hooks and commit only known formatting files
+        shell: bash
+        run: |
+          set -euo pipefail
+          set +e
+          pre-commit run --all-files
+          status=$?
+          set -e
+          while IFS= read -r path; do
+            case "$path" in
+              manus_app/pg_store.py|manus_app/server.py|tests/test_worker_api.py) ;;
+              *) echo "Unexpected modified file: $path"; exit 1 ;;
+            esac
+          done < <(git diff --name-only)
+          git diff --check
+          git add -- manus_app/pg_store.py manus_app/server.py tests/test_worker_api.py
+          if git diff --cached --quiet; then
+            test "$status" -eq 0
+            echo "No formatting changes required"
+            exit 0
+          fi
+          git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' commit -m 'style: apply pinned pre-commit formatting'
+          pre-commit run --all-files
+          git push origin HEAD:refs/heads/feat/manus-integrated-app

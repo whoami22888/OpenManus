@@ -4,6 +4,7 @@ on:
     paths:
       - 'manus_app/**'
       - 'tests/test_workspace.py'
+      - 'tests/test_existing_sandbox.py'
       - 'requirements-workspace.txt'
       - '.github/workflows/manus-workspace.yml'
   push:
@@ -11,6 +12,7 @@ on:
     paths:
       - 'manus_app/**'
       - 'tests/test_workspace.py'
+      - 'tests/test_existing_sandbox.py'
       - 'requirements-workspace.txt'
 permissions:
   contents: read
@@ -30,7 +32,7 @@ jobs:
       - name: Install app and test dependencies
         run: python -m pip install -r requirements-workspace.txt pytest httpx
       - name: Backend regression tests
-        run: PYTHONPATH=. python -m pytest -q tests/test_workspace.py
+        run: PYTHONPATH=. python -m pytest -q tests/test_workspace.py tests/test_existing_sandbox.py
       - uses: actions/setup-node@v4
         with:
           node-version: '22'

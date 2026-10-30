@@ -143,6 +143,31 @@ def test_scheduler_claim_is_atomic(tmp_path):
     assert len(store.pop_due()) == 0
 
 
+def test_due_automation_submits_and_completes_task(tmp_path, monkeypatch):
+    # Shorten only the scheduler's idle interval; exercise its real claim,
+    # submission, executor, and persisted task result.
+    original_sleep = asyncio.sleep
+
+    async def scheduler_sleep(seconds):
+        await original_sleep(0.01 if seconds == 10 else seconds)
+
+    monkeypatch.setattr("manus_app.server.asyncio.sleep", scheduler_sleep)
+    app = create_app(tmp_path, app_token=TOKEN, executor_factory=FakeAgent)
+    item = app.state.store.automation("Due now", "Check source", 60)
+    with app.state.store._db() as db:
+        db.execute("UPDATE automations SET next_run=0 WHERE id=?", (item["id"],))
+    with TestClient(app):
+        deadline = time.monotonic() + 2
+        while time.monotonic() < deadline:
+            tasks = app.state.store.all("tasks")
+            if tasks and tasks[0]["status"] == "completed":
+                break
+            time.sleep(0.01)
+        assert len(tasks) == 1
+        assert tasks[0]["status"] == "completed"
+        assert tasks[0]["result"] == "Completed: Check source"
+
+
 def test_upload_download_and_filename_sanitized(client):
     r = client.post(
         "/api/files",

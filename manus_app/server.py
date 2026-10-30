@@ -270,7 +270,7 @@ def create_app(
         while True:
             await asyncio.sleep(10)
             for item in db.pop_due():
-                submit(
+                await submit(
                     TaskPayload(
                         prompt=item["prompt"],
                         project_id=item["project_id"],

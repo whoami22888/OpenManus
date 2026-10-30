@@ -522,6 +522,25 @@ def create_app(
         db.event(id, "artifact", "Saved " + obj["name"] + " to Library")
         return obj
 
+    @app.post("/internal/worker/wake", dependencies=[Depends(worker_auth)])
+    async def wake_scheduled_jobs():
+        """Best-effort hourly wake-up; immutable due claims prevent double dispatch."""
+        if os.getenv("MANUS_GITHUB_NO_CHARGE_VERIFIED") != "1":
+            raise HTTPException(503, "Free runner budget is not confirmed")
+        due = db.pop_due()
+        dispatched = 0
+        for item in due:
+            try:
+                await submit(TaskPayload(
+                    prompt=item["prompt"], project_id=item["project_id"],
+                    agent_id=item["agent_id"]
+                ))
+                dispatched += 1
+            except HTTPException:
+                # submit records an explicit failed task; no silent success.
+                pass
+        return {"dispatched": dispatched, "due": len(due)}
+
     @app.get("/api/computers", dependencies=[Depends(auth)])
     def computers():
         cap = capabilities()

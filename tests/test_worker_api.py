@@ -140,3 +140,21 @@ def test_cancelled_task_cannot_be_revived_by_worker(configured):
         ).status_code
         == 409
     )
+
+
+def test_hourly_wakeup_dispatches_due_automation(configured, monkeypatch):
+    client, dispatcher, _ = configured
+    monkeypatch.setenv("MANUS_GITHUB_NO_CHARGE_VERIFIED", "1")
+    owner = {"Authorization": "Bearer " + TOKEN}
+    worker = {"Authorization": "Bearer " + WORKER}
+    automation = client.post("/api/automations", headers=owner, json={
+        "name": "Hourly research", "prompt": "Research topic", "interval_minutes": 60
+    }).json()
+    store = client.app.state.store
+    with store._db() as db:
+        db.execute("UPDATE automations SET next_run=0 WHERE id=?", (automation["id"],))
+    response = client.post("/internal/worker/wake", headers=worker)
+    assert response.status_code == 200
+    assert response.json()["dispatched"] == 1
+    assert len(dispatcher.ids) == 1
+    assert client.post("/internal/worker/wake", headers=worker).json()["dispatched"] == 0
